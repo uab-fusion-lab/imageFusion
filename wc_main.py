@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from fetch_data import fetch_scaler_data, fetch_mnist_data
-from MNmodel import OneLayerCNN, LinearClassifier, MLP, CNNClassifier, CNN, ResNet18
+from MNmodel import OneLayerCNN, LinearClassifier, MLP, SMLP, CNNClassifier, CNN, ResNet18
 import naiveModel
 import torchvision
 from torchvision import datasets, transforms
@@ -13,19 +13,19 @@ import torch.nn.functional as F
 
 from data import noniid_partition_loader
 
-fbsz = 64
+fbsz = 2
 
-model = MLP()
+model = SMLP()
 model_path = './model/naiveMLP_NMIST.pt'
 
-model_clone_test = MLP()
+model_clone_test = SMLP()
 
 criterion_clone_test = nn.CrossEntropyLoss()
 optimizer_clone_test = optim.SGD(model_clone_test.parameters(), lr=0.001)
 
 def fusion_train():
-    train_dataset, test_dataset = fetch_mnist_data()
-    # fetch_scaler_data()
+    # train_dataset, test_dataset = fetch_mnist_data()
+    train_dataset, test_dataset = fetch_scaler_data()
 
     noniid_client_train_loader = noniid_partition_loader(train_dataset, bsz=fbsz)
     dataset_len = len(noniid_client_train_loader)
@@ -37,7 +37,7 @@ def fusion_train():
     # Define loss function and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
-    model_clone_test.train()
+
 
     #
     # optimizer_test = optim.Adam(model_clone_test.parameters(), lr=0.001)
@@ -48,7 +48,7 @@ def fusion_train():
     for name, W in model.named_parameters():
         z = torch.zeros_like(W)
         grads_diff.append(z)
-    # test_acc(model_clone_test, test_loader)
+
     for epoch in range(num_epochs):
         print(f"epoch: {epoch:.2f}")
 
@@ -58,7 +58,7 @@ def fusion_train():
 
                 fmodel = fusion_model(model)
                 # fmodel.basic_model.load_state_dict(copy.deepcopy(model.state_dict()))
-                model_clone = MLP()
+                model_clone = SMLP()
                 model_clone.load_state_dict(copy.deepcopy(model.state_dict()))
                 optimizer_clone = optim.SGD(model_clone.parameters(), lr=0.001)
                 optimizer_clone.zero_grad()

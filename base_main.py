@@ -3,73 +3,42 @@ import copy
 import torch
 import torch.nn as nn
 
-from MNmodel import OneLayerCNN, LinearClassifier, MLP, CNNClassifier, CNN
+from MNmodel import OneLayerCNN, LinearClassifier, SMLP, CNNClassifier, CNN, SLinearClassifier
 import naiveModel
 import torchvision
 from torchvision import datasets, transforms
 import torch.optim as optim
 import torch.nn.functional as F
 
+from fetch_data import fetch_scaler_data, fetch_mnist_data
+
 from data import noniid_partition_loader
 
-fbsz = 64
+fbsz = 2
 
-model = CNN()
+model = SMLP()
 model_path = './model/naiveMLP_NMIST.pt'
 
-model_clone_test = CNN()
+model_clone_test = SMLP()
 
 criterion_clone_test = nn.CrossEntropyLoss()
 optimizer_clone_test = optim.SGD(model_clone_test.parameters(), lr=0.001)
 
 
 def train():
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
-    ])
-
-    # Download and load the training data
-    train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=fbsz, shuffle=True)
+    # train_dataset, test_dataset = fetch_mnist_data()
+    train_dataset, test_dataset = fetch_scaler_data()
 
     noniid_client_train_loader = noniid_partition_loader(train_dataset, bsz=fbsz)
     dataset_len = len(noniid_client_train_loader)
 
     # Download and load the test data
-    test_dataset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
+
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=fbsz, shuffle=False)
-
-    # Create a dictionary to hold datasets for each label
-    label_datasets = {}
-
-    # Loop through the dataset and separate by labels
-    for data, label in train_dataset:
-        if label not in label_datasets:
-            label_datasets[label] = []
-        label_datasets[label].append((data, label))
-
-    # Create data loaders for each label dataset
-    label_data_loaders = {}
-    for label, data_samples in label_datasets.items():
-        label_data_loaders[label] = torch.utils.data.DataLoader(data_samples, batch_size=fbsz, shuffle=True)
-
-    label_datasets_test = {}
-
-    # Loop through the dataset and separate by labels
-    for data, label in test_dataset:
-        if label not in label_datasets_test:
-            label_datasets_test[label] = []
-        label_datasets_test[label].append((data, label))
-
-    label_data_loaders_test = {}
-    for label, data_samples in label_datasets.items():
-        label_data_loaders_test[label] = torch.utils.data.DataLoader(data_samples, batch_size=fbsz, shuffle=True)
 
     # Define loss function and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
-    model_clone_test.train()
 
     #
     # optimizer_test = optim.Adam(model_clone_test.parameters(), lr=0.001)

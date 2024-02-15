@@ -39,6 +39,26 @@ class CNNClassifier(nn.Module):
         x = x.view(-1, 10)  # Flatten the output for classification
         return x
 
+class SLinearClassifier(nn.Module):
+    def __init__(self):
+        super(SLinearClassifier, self).__init__()
+        self.linear = nn.Linear(19, 7)
+
+    def forward(self, x):
+        x = x.view(-1, 19)
+        return self.linear(x)
+
+class CNNClassifier(nn.Module):
+    def __init__(self):
+        super(CNNClassifier, self).__init__()
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=5, stride=1)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.adaptive_avg_pool2d(x, (1, 1))  # Global Average Pooling to reduce each feature map to a single value
+        x = x.view(-1, 10)  # Flatten the output for classification
+        return x
+
 
 class MLP(nn.Module):
     def __init__(self):
@@ -46,6 +66,20 @@ class MLP(nn.Module):
         self.fc1 = nn.Linear(784, 128)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = x.flatten(1)
+        out = self.fc1(x)
+        out = self.relu(out)
+        out = self.fc2(out)
+        return out
+
+class SMLP(nn.Module):
+    def __init__(self):
+        super(SMLP, self).__init__()
+        self.fc1 = nn.Linear(19, 128)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(128, 7)
 
     def forward(self, x):
         x = x.flatten(1)
