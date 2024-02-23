@@ -3,6 +3,7 @@ import copy
 import torch
 import torch.nn as nn
 
+from fetch_data import fetch_scaler_data, fetch_mnist_data
 from MNmodel import OneLayerCNN, LinearClassifier, MLP, CNNClassifier, CNN
 import naiveModel
 import torchvision
@@ -17,47 +18,15 @@ fbsz = 64
 model = CNN()
 
 def fd_fusion_train(client):
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
-    ])
-
-    # Download and load the training data
-    train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=fbsz, shuffle=True)
+    train_dataset, test_dataset = fetch_mnist_data()
+    # train_dataset, test_dataset = fetch_scaler_data()
 
     noniid_client_train_loader = noniid_partition_loader(train_dataset, bsz=fbsz)
     dataset_len = len(noniid_client_train_loader)
 
     # Download and load the test data
-    test_dataset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
+
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=fbsz, shuffle=False)
-
-    # Create a dictionary to hold datasets for each label
-    label_datasets = {}
-
-    # Loop through the dataset and separate by labels
-    for data, label in train_dataset:
-        if label not in label_datasets:
-            label_datasets[label] = []
-        label_datasets[label].append((data, label))
-
-    # Create data loaders for each label dataset
-    label_data_loaders = {}
-    for label, data_samples in label_datasets.items():
-        label_data_loaders[label] = torch.utils.data.DataLoader(data_samples, batch_size=fbsz, shuffle=True)
-
-    label_datasets_test = {}
-
-    # Loop through the dataset and separate by labels
-    for data, label in test_dataset:
-        if label not in label_datasets_test:
-            label_datasets_test[label] = []
-        label_datasets_test[label].append((data, label))
-
-    label_data_loaders_test = {}
-    for label, data_samples in label_datasets.items():
-        label_data_loaders_test[label] = torch.utils.data.DataLoader(data_samples, batch_size=fbsz, shuffle=True)
 
     # Define loss function and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -72,7 +41,7 @@ def fd_fusion_train(client):
     # test_acc(model_clone_test, test_loader)
     global_model = model
     for epoch in range(num_epochs):
-        print(f"epoch: {epoch:.2f}")
+        # print(f"epoch: {epoch:.2f}")
 
         # model.train()
         # model_clone_test.train()
@@ -157,7 +126,7 @@ def test_acc(model_clone_test, test_loader):
             test_total += labels.size(0)
             test_correct += predicted.eq(labels).sum().item()
     test_accuracy = 100 * test_correct / test_total
-    print(f"Test Accuracy: {test_accuracy:.2f}%")
+    print(f"{test_accuracy:.2f},")
 
 
 class fusion_model(nn.Module):
@@ -189,17 +158,8 @@ class fusion_model(nn.Module):
                 grad_w = torch.autograd.grad(loss, self.basic_model.parameters(),create_graph=True)
                 # grad_w_reshape = self.change_dim(grad_w)
                 # grad_target_reshape = self.change_dim(grad_target)
-                # loss_w = F.mse_loss(grad_w_reshape, grad_target_reshape)
-                loss_0 = citerien(grad_w[0], grad_target[0])
-                loss_1 = citerien(grad_w[1], grad_target[1])
-                loss_2 = citerien(grad_w[2], grad_target[2])
-                loss_3 = citerien(grad_w[3], grad_target[3])
-                loss_4 = citerien(grad_w[4], grad_target[4])
-                loss_5 = citerien(grad_w[5], grad_target[5])
-                loss_6 = citerien(grad_w[6], grad_target[6])
-                loss_7 = citerien(grad_w[7], grad_target[7])
-
-                loss_w = loss_0 + loss_1 + 1 * loss_2 + loss_3 + loss_4 + loss_5 + loss_6 + loss_7
+                grads = [citerien(x, y) for x, y in zip(grad_w, grad_target)]
+                loss_w = sum(grads)
                 # print(loss_w)
             grad_x = torch.autograd.grad(loss_w, [x])[0]
             x = x.detach() - self.step_size * torch.sign(grad_x.detach())
@@ -245,4 +205,4 @@ if __name__ == '__main__':
     # total_fc1_params = sum(p.numel() for p in fc1_params)
     # print(f"Total parameters in the fully connected layer: {total_fc1_params}")
     print("fed avg client = 1")
-    fd_fusion_train(2)
+    fd_fusion_train(4)
