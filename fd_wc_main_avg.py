@@ -59,16 +59,16 @@ def fd_fusion_train(client):
                     train_image = torch.cat(training_images, dim=0)
                     avg_grad = [tensor / client for tensor in sum_grad]
 
-                    for e in range(fbsz):
 
-                        optimizer.zero_grad()
-                        result = global_model(train_image)
+
+                    optimizer.zero_grad()
+                    result = global_model(train_image)
                         # index = torch.argmax(result, dim=1)
                         # torch.full((client,), labels[0])
-                        loss = criterion(result, torch.tensor(torch.full((client,), labels[0])))
+                    loss = criterion(result, torch.tensor(torch.full((client,), labels[0])))
                         # loss = criterion(result, torch.tensor(labels[:client]))
-                        loss.backward()
-                        optimizer.step()
+                    loss.backward()
+                    optimizer.step()
 
                     grads_new = []
                     for name, W in global_model.named_parameters():
@@ -101,21 +101,32 @@ def initial_grad():
 
 
 def train_local(criterion, global_model, grads_diff, images, labels):
-    local_model = copy.deepcopy(global_model)
+
     fmodel = fusion_model(global_model)
-    optimizer_clone = optim.SGD(local_model.parameters(), lr=0.001)
-    optimizer_clone.zero_grad()
-    outputs = local_model(images)
-    loss_clone = criterion(outputs, labels)
-    loss_clone.backward()
-    optimizer_clone.step()
-    avg_images = torch.mean(images, dim=0)
+
+
     grads = []
-    for name, W in local_model.named_parameters():
-        grad = W.grad.detach()
-        grads.append(grad)
+    bs = images.shape[0]
+    for e in range(bs):
+        local_model = copy.deepcopy(global_model)
+        optimizer_clone = optim.SGD(local_model.parameters(), lr=0.001)
+        optimizer_clone.zero_grad()
+        outputs = local_model(images[e].unsqueeze(0))
+        loss_clone = criterion(outputs, labels[e].unsqueeze(0))
+        loss_clone.backward()
+        optimizer_clone.step()
+        avg_images = torch.mean(images, dim=0)
+        i=0
+        for name, W in local_model.named_parameters():
+            grad = W.grad.detach()
+            if e == 0 :
+                grads.append(grad)
+            else:
+                grads[i] += grad
+            i+=1
+    grads = [x/bs for x in grads]
     grads = [g1 + g2 for g1, g2 in zip(grads, grads_diff)]
-    final_image = fmodel(avg_images.unsqueeze(0), [x / 12 for x in grads], torch.tensor([labels[0]]))
+    final_image = fmodel(avg_images.unsqueeze(0), grads, torch.tensor([labels[0]]))
     return final_image, grads
 
 
